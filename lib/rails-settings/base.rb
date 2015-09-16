@@ -8,9 +8,11 @@ module RailsSettings
                  :dependent  => :delete_all,
                  :class_name => self.setting_object_class_name
 
-        def settings(var)
+        def settings(var, postfix=nil)
           raise ArgumentError unless var.is_a?(Symbol)
           raise ArgumentError.new("Unknown key: #{var}") unless self.class.default_settings[var]
+
+          var = _amend_postfix(var, postfix)
 
           if defined?(ProtectedAttributes)
             setting_objects.detect { |s| s.var == var.to_s } || setting_objects.build({ :var => var.to_s }, :without_protection => true)
@@ -41,6 +43,23 @@ module RailsSettings
             settings_hash[var] = settings_hash[var].merge(settings(var.to_sym).value)
           end
           settings_hash
+        end
+
+        private
+
+        def _amend_postfix(var, postfix)
+          unless postfix.nil?
+            if postfix.is_a?(Class)
+              var = [var.to_s,postfix.to_s.downcase].join(':').to_sym
+            elsif postfix.respond_to?(:id) && postfix.try(:id)
+              postfix = [postfix.class.to_s.downcase, postfix.id].join('_')
+              var = [var.to_s,postfix].join(':').to_sym
+            else
+              raise ArgumentError unless postfix.is_a?(Symbol)
+              var = [var.to_s,postfix.to_s].join(':').to_sym
+            end
+          end
+          var
         end
       end
     end

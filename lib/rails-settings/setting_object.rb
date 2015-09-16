@@ -8,18 +8,18 @@ module RailsSettings
     validate do
       errors.add(:value, "Invalid setting value") unless value.is_a? Hash
 
-      unless _target_class.default_settings[var.to_sym]
+      unless _target_class.default_settings[_var_without_postfix.to_sym]
         errors.add(:var, "#{var} is not defined!")
       end
     end
 
     serialize :value, Hash
 
-    # attr_protected can not be used here because it touches the database which is not connected yet.
+    attr_accessor :scope
+
+    # attr_protected can not be here used because it touches the database which is not connected yet.
     # So allow no attributes and override <tt>#sanitize_for_mass_assignment</tt>
-    if defined?(ProtectedAttributes)
-      attr_accessible
-    end
+    attr_accessible if defined?(ProtectedAttributes)
 
     REGEX_SETTER = /\A([a-z]\w+)=\Z/i
     REGEX_GETTER = /\A([a-z]\w+)\Z/i
@@ -55,7 +55,7 @@ module RailsSettings
   private
     def _get_value(name)
       if value[name].nil?
-        _target_class.default_settings[var.to_sym][name]
+        _target_class.default_settings[_var_without_postfix.to_sym][name]
       else
         value[name]
       end
@@ -75,6 +75,23 @@ module RailsSettings
 
     def _target_class
       target_type.constantize
+    end
+
+    def _var_without_postfix
+      var.split(':')[0]
+    end
+
+    # Patch ActiveRecord to save serialized attributes only if they are changed
+    if defined?(ProtectedAttributes)
+      # https://github.com/rails/rails/blob/3-2-stable/activerecord/lib/active_record/attribute_methods/dirty.rb#L70
+      def update(*)
+        super(changed) if changed?
+      end
+    else
+      # https://github.com/rails/rails/blob/4-0-stable/activerecord/lib/active_record/attribute_methods/dirty.rb#L73
+      def update_record(*)
+        super(keys_for_partial_write) if changed?
+      end
     end
   end
 end
